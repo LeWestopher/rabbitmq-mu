@@ -1,7 +1,6 @@
 /**
  * Created by westopher on 9/22/15.
  */
-var railgun = require('./railgun');
 var module = require('./patterns');
 
 var service = module('model.user')

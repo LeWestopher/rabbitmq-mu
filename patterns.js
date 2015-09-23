@@ -2,12 +2,22 @@
  * Created by westopher on 9/22/15.
  */
 var amqp = require('amqplib/callback_api');
-
+/**
+ * Constructor for a work queue pattern
+ *
+ * @param queue
+ * @param callback
+ * @constructor
+ */
 function WorkQueue (queue, callback) {
     this.queue = queue;
     this.callback = callback || function (){};
 }
-
+/**
+ * Execution function for WorkQueue constructor
+ *
+ * @param conn
+ */
 WorkQueue.prototype.execute = function (conn) {
     var _this = this;
     conn.createChannel(function (err, channel) {
@@ -22,12 +32,22 @@ WorkQueue.prototype.execute = function (conn) {
 
     });
 };
-
+/**
+ * Constructor for subscription side of publish/subscribe pattern
+ *
+ * @param exchange
+ * @param callback
+ * @constructor
+ */
 function PubSub (exchange, callback) {
     this.exchange = exchange;
     this.callback = callback || function(){};
 }
-
+/**
+ * Execution function for PubSub constructor
+ *
+ * @param conn
+ */
 PubSub.prototype.execute = function (conn) {
     var _this = this;
     conn.createChannel(function (err, channel) {
@@ -45,13 +65,24 @@ PubSub.prototype.execute = function (conn) {
 
     })
 };
-
+/**
+ * Constructor function for a routed exchange pattern
+ *
+ * @param exchange
+ * @param routes
+ * @param callback
+ * @constructor
+ */
 function Routed (exchange, routes, callback) {
     this.exchange = exchange;
     this.routes = routes;
     this.callback = callback || function(){};
 }
-
+/**
+ * Execution function for Routed exchange constructor
+ *
+ * @param conn
+ */
 Routed.prototype.execute = function (conn) {
     var _this = this;
     conn.createChannel(function (err, channel) {
@@ -75,13 +106,24 @@ Routed.prototype.execute = function (conn) {
         });
     });
 };
-
+/**
+ * Constructor for topic based exchange
+ *
+ * @param exchange
+ * @param topics
+ * @param callback
+ * @constructor
+ */
 function Topic (exchange, topics, callback) {
     this.exchange = exchange;
     this.topics = topics;
     this.callback = callback || function(){};
 }
-
+/**
+ * Execution function for topic based exchange
+ *
+ * @param conn
+ */
 Topic.prototype.execute = function (conn) {
     var _this = this;
     conn.createChannel(function (err, channel) {
@@ -105,12 +147,22 @@ Topic.prototype.execute = function (conn) {
         });
     });
 };
-
+/**
+ * Constructor for RPC based pattern
+ *
+ * @param queue
+ * @param callback
+ * @constructor
+ */
 function RPC (queue, callback) {
     this.queue = queue;
     this.callback = callback || function (){};
 }
-
+/**
+ * Execution function for RPC constructor
+ *
+ * @param conn
+ */
 RPC.prototype.execute = function (conn) {
     var _this = this;
     conn.createChannel(function (err, channel) {
@@ -132,53 +184,98 @@ RPC.prototype.execute = function (conn) {
         });
     });
 };
-
+/**
+ * Main service pattern constructor
+ *
+ * @param namespace
+ * @constructor
+ */
 function Patterns (namespace) {
     this.namespace(namespace);
     this.patterns = [];
     this.rpc_calls = [];
 }
-
+/**
+ * Sets the current namespace of the service being declared
+ *
+ * @param namespace
+ * @returns {Patterns}
+ */
 Patterns.prototype.namespace = function (namespace) {
     this.namespace = namespace;
     return this;
 };
-
+/**
+ * Builds a new worker queue on the current service
+ *
+ * @param queue
+ * @param callback
+ * @returns {Patterns}
+ */
 Patterns.prototype.workQueue = function (queue, callback) {
     queue = this.namespace + '.' + queue;
     var wq = new WorkQueue(queue, callback);
     this.patterns.push(wq);
     return this;
 };
-
+/**
+ * Builds a new subscription via the publish/subscribe pattern on the current service.
+ *
+ * @param exchange
+ * @param callback
+ * @returns {Patterns}
+ */
 Patterns.prototype.pubSub = function (exchange, callback) {
     exchange = this.namespace + '.' + exchange;
     var ps = new PubSub(exchange, callback);
     this.patterns.push(ps);
     return this;
 };
-
+/**
+ * Builds a new routed exchange pattern on the current service
+ *
+ * @param exchange
+ * @param routes
+ * @param callback
+ * @returns {Patterns}
+ */
 Patterns.prototype.routed = function (exchange, routes, callback) {
     exchange = this.namespace + '.' + exchange;
     var routed = new Routed(exchange, routes, callback);
     this.patterns.push(routed);
     return this;
 };
-
+/**
+ * Builds a new topic based exchange on the current service.
+ *
+ * @param exchange
+ * @param topics
+ * @param callback
+ * @returns {Patterns}
+ */
 Patterns.prototype.topic = function (exchange, topics, callback) {
     exchange = this.namespace + '.' + exchange;
     var topic = new Topic(exchange, topics, callback);
     this.patterns.push(topic);
     return this;
 };
-
+/**
+ * Builds a new RPC queue on the current service.  RPC allows services to return data to the client.
+ * @param queue
+ * @param callback
+ * @returns {Patterns}
+ */
 Patterns.prototype.rpc = function (queue, callback) {
     queue = this.namespace + '.rpc.' + queue;
     var rpc = new RPC(queue, callback);
     this.rpc_calls.push(rpc);
     return this;
 };
-
+/**
+ * Initializer function for the AMQP service.  Registers all patterns in memory with the amqp provider
+ *
+ * @param callback
+ */
 Patterns.prototype.init = function (callback) {
     var _this = this;
     amqp.connect('amqp://localhost', function (err, conn) {
@@ -193,7 +290,12 @@ Patterns.prototype.init = function (callback) {
         callback();
     });
 };
-
+/**
+ * Broadcast data to a particular queue
+ *
+ * @param queue
+ * @param args
+ */
 Patterns.prototype.broadcast = function (queue, args) {
     queue = this.namespace + '.' + queue;
     amqp.connect('amqp://localhost', function (err, conn) {
@@ -206,7 +308,12 @@ Patterns.prototype.broadcast = function (queue, args) {
         })
     })
 };
-
+/**
+ * Publish data to a particular queue
+ *
+ * @param exchange
+ * @param args
+ */
 Patterns.prototype.publish = function (exchange, args) {
     exchange = this.namespace + '.' + exchange;
     amqp.connect('amqp://localhost', function (err, conn) {
@@ -219,7 +326,13 @@ Patterns.prototype.publish = function (exchange, args) {
         })
     })
 };
-
+/**
+ * Call and RPC method for a foreign module
+ *
+ * @param rpc_string
+ * @param args
+ * @param callback
+ */
 Patterns.prototype.callRpc = function (rpc_string, args, callback) {
     rpc_string = this.namespace + '.rpc.' + rpc_string;
     amqp.connect('amqp://localhost', function(err, conn) {
@@ -251,12 +364,21 @@ Patterns.prototype.callRpc = function (rpc_string, args, callback) {
         });
     });
 };
-
-
+/**
+ * Export our service
+ *
+ * @param namespace
+ * @returns {Patterns}
+ */
 module.exports = function (namespace) {
     return new Patterns(namespace);
 };
-
+/**
+ * Convert a JSON string to JavaScript object
+ *
+ * @param string
+ * @returns {{}}
+ */
 function parseJson (string) {
     try {
         var json_obj = JSON.parse(string);
@@ -265,7 +387,11 @@ function parseJson (string) {
         return {};
     }
 }
-
+/**
+ * Convert a JavaScript object to JSON string
+ *
+ * @param object
+ */
 function stringifyJson (object) {
     try {
         var json_string = JSON.stringify(object);
@@ -274,7 +400,11 @@ function stringifyJson (object) {
         return JSON.stringify({});
     }
 }
-
+/**
+ * Generate a random ID for correlation strings in RabbitMQ for RPC calls
+ * 
+ * @returns {string}
+ */
 function generateUuid() {
     return Math.random().toString() +
         Math.random().toString() +
