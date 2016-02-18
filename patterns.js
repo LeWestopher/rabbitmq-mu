@@ -38,10 +38,20 @@ Patterns.prototype.namespace = function (namespace) {
  * @returns {Patterns}
  */
 Patterns.prototype.workQueue = function (queue, callback) {
-    queue = this.namespace + '.' + queue;
+    var _this = this;
+    queue = this.getQueueString(queue);
     var wq = new WorkQueue(queue, callback);
-    this.patterns.push(wq);
-    return this;
+    return {
+        then: function (callback) {
+            _this.patterns.push(
+                wq
+                    .consume()
+                    .then(function (msg) {
+                        return callback(msg);
+                    })
+            )
+        }
+    };
 };
 /**
  * Builds a new subscription via the publish/subscribe pattern on the current service.
@@ -51,14 +61,19 @@ Patterns.prototype.workQueue = function (queue, callback) {
  * @returns {Patterns}
  */
 Patterns.prototype.pubSub = function (exchange, callback) {
-    exchange = this.namespace + '.' + exchange;
+    var _this = this;
+    exchange = this.getExchangeString(exchange);
     var ps = new PubSub(exchange, callback);
     this.patterns.push(ps);
     return {
         then: function (callback) {
-            return ps.then(function (results) {
-                callback(results);
-            })
+            _this.patterns.push(
+                ps
+                    .consume()
+                    .then(function (msg) {
+                        return callback(msg);
+                    })
+            )
         }
     };
 };
@@ -70,11 +85,21 @@ Patterns.prototype.pubSub = function (exchange, callback) {
  * @param callback
  * @returns {Patterns}
  */
-Patterns.prototype.routed = function (exchange, routes, callback) {
-    exchange = this.namespace + '.' + exchange;
-    var routed = new Routed(exchange, routes, callback);
-    this.patterns.push(routed);
-    return this;
+Patterns.prototype.routed = function (exchange, routes) {
+    var _this = this;
+    exchange = this.getExchangeString(exchange);
+    var routed = new Routed(exchange, routes);
+    return {
+        then: function (callback) {
+            _this.patterns.push(
+                routed
+                    .consume()
+                    .then(function (msg) {
+                        return callback(msg);
+                    })
+            )
+        }
+    };
 };
 /**
  * Builds a new topic based exchange on the current service.
@@ -84,11 +109,21 @@ Patterns.prototype.routed = function (exchange, routes, callback) {
  * @param callback
  * @returns {Patterns}
  */
-Patterns.prototype.topic = function (exchange, topics, callback) {
-    exchange = this.namespace + '.' + exchange;
-    var topic = new Topic(exchange, topics, callback);
-    this.patterns.push(topic);
-    return this;
+Patterns.prototype.topic = function (exchange, topics) {
+    var _this = this;
+    exchange = this.getExchangeString(exchange);
+    var topic = new Topic(exchange, topics);
+    return {
+        then: function (callback) {
+            _this.patterns.push(
+                topic
+                    .consume()
+                    .then(function (msg) {
+                        return callback(msg);
+                    })
+            );
+        }
+    };
 };
 /**
  * Builds a new RPC queue on the current service.  RPC allows services to return data to the client.
@@ -96,11 +131,22 @@ Patterns.prototype.topic = function (exchange, topics, callback) {
  * @param callback
  * @returns {Patterns}
  */
-Patterns.prototype.rpc = function (queue, callback) {
-    queue = this.namespace + '.rpc.' + queue;
-    var rpc = new RPC(queue, callback);
+Patterns.prototype.rpc = function (queue) {
+    var _this = this;
+    queue = this.getRpcString(queue);
+    var rpc = new RPC(queue);
     this.rpc_calls.push(rpc);
-    return this;
+    return {
+        then: function (callback) {
+            _this.patterns.push(
+                rpc
+                    .consume()
+                    .then(function (results) {
+                        return callback(results);
+                    })
+            );
+        }
+    };
 };
 /**
  * Initializer function for the AMQP service.  Registers all patterns in memory with the amqp provider
@@ -128,7 +174,7 @@ Patterns.prototype.init = function () {
  * @param args
  */
 Patterns.prototype.broadcast = function (queue, args) {
-    queue = this.namespace + '.' + queue;
+    queue = this.getQueueString(queue);
     return this
         .connect()
         .then(createChannel)
@@ -146,7 +192,7 @@ Patterns.prototype.broadcast = function (queue, args) {
  * @param args
  */
 Patterns.prototype.publish = function (exchange, args) {
-    exchange = this.namespace + '.' + exchange;
+    exchange = this.getExchangeString(exchange);
     return this
         .connect()
         .then(createChannel)
@@ -225,7 +271,7 @@ Patterns.prototype.createRpcChannel = function (conn, rpc_string, args) {
         deferred.resolve([channel, conn, rpc_string, args]);
     });
     return deferred.promise;
-}
+};
 
 Patterns.prototype.createChannel = function (conn, rpc_string) {
     var deferred = Q.defer()
@@ -235,6 +281,18 @@ Patterns.prototype.createChannel = function (conn, rpc_string) {
         deferred.resolve([channel, conn]);
     });
     return deferred.promise;
+};
+
+Patterns.prototype.getQueueString = function (queue) {
+    return this.namespace + '.' + queue;
+};
+
+Patterns.prototype.getExchangeString = function (exchange) {
+    return this.namespace + '.' + exchange;
+};
+
+Patterns.prototype.getRpcString = function (rpc) {
+    return this.namespace + '.rpc.' + rpc;
 };
 
 /**

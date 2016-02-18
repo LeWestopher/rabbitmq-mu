@@ -76,3 +76,5 @@ Routed.prototype.consume = function (conn) {
         .then(this.assertExchangeAndQueue)
         .then(this.bindQueueAndConsume);
 };
+
+module.exports = Routed;

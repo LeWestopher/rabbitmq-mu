@@ -60,3 +60,5 @@ Topic.prototype.consume = function (conn) {
         .createChannelAndAssertExchange()
         .then(this.assertQueueAndConsumeChannel);
 };
+
+module.exports = Topic;

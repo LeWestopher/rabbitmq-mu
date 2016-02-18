@@ -45,3 +45,5 @@ RPC.prototype.consume = function (conn) {
     this.conn = conn;
     return this.createChannel();
 };
+
+module.exports = RPC;
