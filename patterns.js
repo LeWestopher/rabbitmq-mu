@@ -1,189 +1,14 @@
 /**
  * Created by westopher on 9/22/15.
  */
-var amqp = require('amqplib/callback_api');
-/**
- * Constructor for a work queue pattern
- *
- * @param queue
- * @param callback
- * @constructor
- */
-function WorkQueue (queue, callback) {
-    this.queue = queue;
-    this.callback = callback || function (){};
-}
-/**
- * Execution function for WorkQueue constructor
- *
- * @param conn
- */
-WorkQueue.prototype.execute = function (conn) {
-    var _this = this;
-    conn.createChannel(function (err, channel) {
+var amqp        = require('amqplib/callback_api')
+  , Q           = require('q')
+  , PubSub      = require('./PubSub')
+  , Routed      = require('./Routed')
+  , RPC         = require('./RPC')
+  , Topic       = require('./Topic')
+  , WorkQueue   = require('./WorkQueue');
 
-        channel.assertQueue(_this.queue, {durable: true});
-        channel.prefetch(1);
-
-        channel.consume(_this.queue, function (msg) {
-            var input = parseJson(msg.content.toString());
-            _this.callback(input);
-        });
-
-    });
-};
-/**
- * Constructor for subscription side of publish/subscribe pattern
- *
- * @param exchange
- * @param callback
- * @constructor
- */
-function PubSub (exchange, callback) {
-    this.exchange = exchange;
-    this.callback = callback || function(){};
-}
-/**
- * Execution function for PubSub constructor
- *
- * @param conn
- */
-PubSub.prototype.execute = function (conn) {
-    var _this = this;
-    conn.createChannel(function (err, channel) {
-
-        channel.assertExchange(_this.exchange, 'fanout', {durable: false});
-
-        channel.assertQueue('', {exclusive: true}, function (error, q) {
-            channel.bindQueue(q.queue, _this.exchange, '');
-
-            channel.consume(q.queue, function (msg) {
-                var input = parseJson(msg.content.toString());
-                _this.callback(input);
-            })
-        })
-
-    })
-};
-/**
- * Constructor function for a routed exchange pattern
- *
- * @param exchange
- * @param routes
- * @param callback
- * @constructor
- */
-function Routed (exchange, routes, callback) {
-    this.exchange = exchange;
-    this.routes = routes;
-    this.callback = callback || function(){};
-}
-/**
- * Execution function for Routed exchange constructor
- *
- * @param conn
- */
-Routed.prototype.execute = function (conn) {
-    var _this = this;
-    conn.createChannel(function (err, channel) {
-
-        channel.assertExchange(_this.exchange, 'direct', {durable: false});
-
-        channel.assertQueue('', {exclusive: true}, function (err, q) {
-
-            if (typeof _this.routes === 'string') {
-                channel.bindQueue(q.queue, _this.exchange, _this.routes);
-            } else if (typeof _this.routes === 'array') {
-                _this.routes.forEach(function (route) {
-                    channel.bindQueue(q.queue, _this.exchange, route);
-                })
-            }
-
-            channel.consume(q.queue, function (msg) {
-                var input = parseJson(msg.content.toString());
-                _this.callback(input);
-            });
-        });
-    });
-};
-/**
- * Constructor for topic based exchange
- *
- * @param exchange
- * @param topics
- * @param callback
- * @constructor
- */
-function Topic (exchange, topics, callback) {
-    this.exchange = exchange;
-    this.topics = topics;
-    this.callback = callback || function(){};
-}
-/**
- * Execution function for topic based exchange
- *
- * @param conn
- */
-Topic.prototype.execute = function (conn) {
-    var _this = this;
-    conn.createChannel(function (err, channel) {
-
-        channel.assertExchange(_this.exchange, 'topic', {durable: false});
-
-        channel.assertQueue('', {exclusive: true}, function (err, q) {
-
-            if (typeof _this.topics === 'string') {
-                channel.bindQueue(q.queue, _this.exchange, _this.topics);
-            } else if (typeof _this.topics === 'array') {
-                _this.topics.forEach(function (topic) {
-                    channel.bindQueue(q.queue, _this.exchange, topic);
-                })
-            }
-
-            channel.consume(q.queue, function (msg) {
-                var input = parseJson(msg.content.toString());
-                _this.callback(input);
-            });
-        });
-    });
-};
-/**
- * Constructor for RPC based pattern
- *
- * @param queue
- * @param callback
- * @constructor
- */
-function RPC (queue, callback) {
-    this.queue = queue;
-    this.callback = callback || function (){};
-}
-/**
- * Execution function for RPC constructor
- *
- * @param conn
- */
-RPC.prototype.execute = function (conn) {
-    var _this = this;
-    conn.createChannel(function (err, channel) {
-
-        channel.assertQueue(_this.queue, {durable: false});
-        channel.prefetch(1);
-
-        channel.consume(_this.queue, function reply (msg) {
-            var input = parseJson(msg.content.toString());
-            var result = _this.callback(input);
-
-            channel.sendToQueue(
-                msg.properties.replyTo,
-                new Buffer(stringifyJson(result)),
-                {correlationId: msg.properties.correlationId}
-            );
-
-            channel.ack(msg);
-        });
-    });
-};
 /**
  * Main service pattern constructor
  *
@@ -213,10 +38,20 @@ Patterns.prototype.namespace = function (namespace) {
  * @returns {Patterns}
  */
 Patterns.prototype.workQueue = function (queue, callback) {
-    queue = this.namespace + '.' + queue;
+    var _this = this;
+    queue = this.getQueueString(queue);
     var wq = new WorkQueue(queue, callback);
-    this.patterns.push(wq);
-    return this;
+    return {
+        then: function (callback) {
+            _this.patterns.push(
+                wq
+                    .consume()
+                    .then(function (msg) {
+                        return callback(msg);
+                    })
+            )
+        }
+    };
 };
 /**
  * Builds a new subscription via the publish/subscribe pattern on the current service.
@@ -226,10 +61,21 @@ Patterns.prototype.workQueue = function (queue, callback) {
  * @returns {Patterns}
  */
 Patterns.prototype.pubSub = function (exchange, callback) {
-    exchange = this.namespace + '.' + exchange;
+    var _this = this;
+    exchange = this.getExchangeString(exchange);
     var ps = new PubSub(exchange, callback);
     this.patterns.push(ps);
-    return this;
+    return {
+        then: function (callback) {
+            _this.patterns.push(
+                ps
+                    .consume()
+                    .then(function (msg) {
+                        return callback(msg);
+                    })
+            )
+        }
+    };
 };
 /**
  * Builds a new routed exchange pattern on the current service
@@ -239,11 +85,21 @@ Patterns.prototype.pubSub = function (exchange, callback) {
  * @param callback
  * @returns {Patterns}
  */
-Patterns.prototype.routed = function (exchange, routes, callback) {
-    exchange = this.namespace + '.' + exchange;
-    var routed = new Routed(exchange, routes, callback);
-    this.patterns.push(routed);
-    return this;
+Patterns.prototype.routed = function (exchange, routes) {
+    var _this = this;
+    exchange = this.getExchangeString(exchange);
+    var routed = new Routed(exchange, routes);
+    return {
+        then: function (callback) {
+            _this.patterns.push(
+                routed
+                    .consume()
+                    .then(function (msg) {
+                        return callback(msg);
+                    })
+            )
+        }
+    };
 };
 /**
  * Builds a new topic based exchange on the current service.
@@ -253,11 +109,21 @@ Patterns.prototype.routed = function (exchange, routes, callback) {
  * @param callback
  * @returns {Patterns}
  */
-Patterns.prototype.topic = function (exchange, topics, callback) {
-    exchange = this.namespace + '.' + exchange;
-    var topic = new Topic(exchange, topics, callback);
-    this.patterns.push(topic);
-    return this;
+Patterns.prototype.topic = function (exchange, topics) {
+    var _this = this;
+    exchange = this.getExchangeString(exchange);
+    var topic = new Topic(exchange, topics);
+    return {
+        then: function (callback) {
+            _this.patterns.push(
+                topic
+                    .consume()
+                    .then(function (msg) {
+                        return callback(msg);
+                    })
+            );
+        }
+    };
 };
 /**
  * Builds a new RPC queue on the current service.  RPC allows services to return data to the client.
@@ -265,30 +131,41 @@ Patterns.prototype.topic = function (exchange, topics, callback) {
  * @param callback
  * @returns {Patterns}
  */
-Patterns.prototype.rpc = function (queue, callback) {
-    queue = this.namespace + '.rpc.' + queue;
-    var rpc = new RPC(queue, callback);
+Patterns.prototype.rpc = function (queue) {
+    var _this = this;
+    queue = this.getRpcString(queue);
+    var rpc = new RPC(queue);
     this.rpc_calls.push(rpc);
-    return this;
+    return {
+        then: function (callback) {
+            _this.patterns.push(
+                rpc
+                    .consume()
+                    .then(function (results) {
+                        return callback(results);
+                    })
+            );
+        }
+    };
 };
 /**
  * Initializer function for the AMQP service.  Registers all patterns in memory with the amqp provider
  *
  * @param callback
  */
-Patterns.prototype.init = function (callback) {
-    var _this = this;
-    amqp.connect('amqp://localhost', function (err, conn) {
-        _this.patterns.forEach(function (pattern) {
-            pattern.execute(conn);
-        });
+Patterns.prototype.init = function () {
+    var deferred = Q.defer()
+        , _this = this;
 
-        _this.rpc_calls.forEach(function (rpc) {
-            rpc.execute(conn);
-        });
+    var daemons = this.patterns.concat(this.rpc_calls);
 
-        callback();
-    });
+    return this
+        .connect()
+        .then(function (conn) {
+            return Q.all(daemons.map(function (daemon) {
+                daemon.consume(conn);
+            }));
+        });
 };
 /**
  * Broadcast data to a particular queue
@@ -297,16 +174,16 @@ Patterns.prototype.init = function (callback) {
  * @param args
  */
 Patterns.prototype.broadcast = function (queue, args) {
-    queue = this.namespace + '.' + queue;
-    amqp.connect('amqp://localhost', function (err, conn) {
-        conn.createChannel(function (err, channel) {
-
-            var input = JSON.stringify(args);
+    queue = this.getQueueString(queue);
+    return this
+        .connect()
+        .then(createChannel)
+        .spread(function (channel, conn) {
+            var input = stringifyJson(args);
             channel.assertQueue(queue, {durable: true});
             channel.sendToQueue(queue, new Buffer(input), {persistent: true});
             conn.close();
-        })
-    })
+        });
 };
 /**
  * Publish data to a particular queue
@@ -315,55 +192,109 @@ Patterns.prototype.broadcast = function (queue, args) {
  * @param args
  */
 Patterns.prototype.publish = function (exchange, args) {
-    exchange = this.namespace + '.' + exchange;
-    amqp.connect('amqp://localhost', function (err, conn) {
-        conn.createChannel(function (err, channel) {
-
-            var input = JSON.stringify(args);
+    exchange = this.getExchangeString(exchange);
+    return this
+        .connect()
+        .then(createChannel)
+        .then(function (channel, conn) {
+            var input = stringifyJson(args);
             channel.assertExchange(exchange, 'fanout', {durable: false});
             channel.publish(exchange, '', new Buffer(input));
             conn.close();
         })
-    })
+        .done();
 };
-/**
- * Call and RPC method for a foreign module
- *
- * @param rpc_string
- * @param args
- * @param callback
- */
-Patterns.prototype.callRpc = function (rpc_string, args, callback) {
+
+Patterns.prototype.callRpc = function (rpc_string, args) {
     rpc_string = this.namespace + '.rpc.' + rpc_string;
-    amqp.connect('amqp://localhost', function(err, conn) {
-        conn.createChannel(function(err, ch) {
-            ch.assertQueue('', {exclusive: true}, function(err, q) {
-                console.log('Queue asserted.');
-                console.log(rpc_string);
-                var corr = generateUuid();
-                var input = stringifyJson(args);
-
-                ch.consume(q.queue, function(msg) {
-                    console.log('Channel consumed.');
-                    if (msg.properties.correlationId == corr) {
-                        console.log(msg.content.toString());
-                        var output = parseJson(msg.content.toString());
-                        callback(output);
-                        conn.close();
-                    }
-                }, {noAck: true});
-
-                ch.sendToQueue(
-                    rpc_string,
-                    new Buffer(input),
-                    { correlationId: corr, replyTo: q.queue }
-                );
-            });
-
-
-        });
-    });
+    return this
+        .rpcConnect(rpc_string, args)
+        .spread(this.createRpcChannel)
+        .spread(this.assertRpcQueue)
 };
+
+Patterns.prototype.assertRpcQueue = function (channel, conn, rpc_string, args) {
+    var deferred = Q.defer()
+        , _this = this;
+
+    channel.assertQueue('', {exclusive: true}, function(err, q) {
+
+        if (err) {
+            deferred.reject(err);
+        }
+
+        var corr = generateUuid();
+        var input = stringifyJson(args);
+
+        channel.consume(q.queue, function(msg) {
+            if (msg.properties.correlationId == corr) {
+                deferred.resolve(msg);
+                conn.close();
+            }
+        }, {noAck: true});
+
+        channel.sendToQueue(
+            rpc_string,
+            new Buffer(input),
+            { correlationId: corr, replyTo: q.queue }
+        );
+    });
+    return deferred.promise;
+};
+
+
+Patterns.prototype.connect = function () {
+    var deferred = Q.defer()
+        , _this = this;
+    amqp.connect('amqp://localhost', function (err, conn) {
+        if (err) return deferred.reject(err);
+        deferred.resolve(conn);
+    });
+    return deferred.promise;
+};
+
+Patterns.prototype.rpcConnect = function (rpc_string, args) {
+    var deferred = Q.defer()
+        , _this = this;
+    amqp.connect('amqp://localhost', function (err, conn) {
+        if (err) return deferred.reject(err);
+        deferred.resolve([conn, rpc_string, args]);
+    });
+    return deferred.promise;
+};
+
+Patterns.prototype.createRpcChannel = function (conn, rpc_string, args) {
+    var deferred = Q.defer()
+        , _this = this;
+    conn.createChannel(function (err, channel) {
+        if (err) return deferred.reject(err);
+        deferred.resolve([channel, conn, rpc_string, args]);
+    });
+    return deferred.promise;
+};
+
+Patterns.prototype.createChannel = function (conn, rpc_string) {
+    var deferred = Q.defer()
+      , _this = this;
+    conn.createChannel(function (err, channel) {
+        if (err) return deferred.reject(err);
+        deferred.resolve([channel, conn]);
+    });
+    return deferred.promise;
+};
+
+Patterns.prototype.getQueueString = function (queue) {
+    return this.namespace + '.' + queue;
+};
+
+Patterns.prototype.getExchangeString = function (exchange) {
+    return this.namespace + '.' + exchange;
+};
+
+Patterns.prototype.getRpcString = function (rpc) {
+    return this.namespace + '.rpc.' + rpc;
+};
+
 /**
  * Export our service
  *
