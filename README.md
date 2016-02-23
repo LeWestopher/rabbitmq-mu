@@ -1,4 +1,5 @@
-# Mu.js - An elegant solution to building RabbitMQ-based Node.js microservices
+# Mu.js -
+### An elegant solution to building RabbitMQ-based Node.js microservices
 
 This respository is currently under construction due to the conversion from a callback based architecture to a promise based
 architecture, but you are still welcome to peruse some of the code that is available to view.  Here are some (untested and potentially explosive) examples:
