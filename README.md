@@ -73,3 +73,7 @@ rabbitmq('your-namespace')
 - [ ] Inclusion of the message topic in the returned arguments for a Topic-based exchange
 - [ ] Configurable connection input for RabbitMQ.  Currently is set to the typical localhost connection
 - [ ] Full testing utilizing Jasmine
+
+## License
+
+Copyright 2015–2016 Quinton Wesley King and contributors MIT License
