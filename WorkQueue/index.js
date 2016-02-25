@@ -12,7 +12,7 @@ function WorkQueue (queue, callback) {
 
 WorkQueue.prototype.createChannel = function () {
     var deferred = Q.defer()
-        , _this = this;
+      , _this = this;
 
     this.conn.createChannel(function (err, channel) {
 
