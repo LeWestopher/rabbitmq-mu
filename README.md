@@ -19,6 +19,28 @@ rabbitmq('your-namespace')
     });
 ```
 
+## Building your first Work Queue
+
+Work queues are some of the most basic types of microservices that can be extended using Mu to offset processing time
+of various actions off of your request/response.  The sending of emails, large file parsing, and other computational
+expensive actions can be created within your work queue and then delegated to from your main application.  Here is an
+example of a potential email sender:
+
+```javascript
+
+var rabbitmq = require('./patterns');
+var PubSub = require('./PubSub/index');
+
+rabbitmq('your-namespace')
+    .workQueue('email-sender')
+    // Your queue string maps out to 'your-namespace.email-sender'
+    .then(function (message) {
+        var email_object = message.content.toJson();
+        var email = new Email(email_object.address, email_object.subject, email_object.body);
+        return email.send();
+    });
+```
+
 ## Manually building a Publish/Subscribe exchange
 
 First we must get our connection object, and then build a new PubSub object with it as the first argument:
@@ -69,10 +91,29 @@ rabbitmq('your-namespace')
 
 - [ ] Full Documentation for all subscription types
 - [ ] Uploaded to NPM for inclusion via package manager
-- [ ] Better design for how multiple microservice daemons are built on a single RabbitMQ namespace
+- [ ] ~Better design for how multiple microservice daemons are built on a single RabbitMQ namespace~ (Better solution found)
 - [ ] Inclusion of the message topic in the returned arguments for a Topic-based exchange
-- [ ] Configurable connection input for RabbitMQ.  Currently is set to the typical localhost connection
+- [X] Configurable connection input for RabbitMQ.  Currently is set to the typical localhost connection
 - [ ] Full testing utilizing Jasmine
+
+## Docs Roadmap
+
+- [X] Connection Docs
+- [ ] Connection with configuration docs
+- [X] Shorthand Work Queue Docs
+- [ ] Shorthand PubSub Docs
+- [ ] Shorthand Routed Docs
+- [ ] Shorthand Topic Docs
+- [ ] Shorthand RPC Docs
+- [ ] Manual Work Queue Docs
+- [X] Manual PubSub Docs
+- [ ] Manual Routed Docs
+- [ ] Manual Topic Docs
+- [ ] Manual RPC Docs
+- [ ] Broadcasting Docs
+- [ ] Publishing Docs
+- [ ] Calling RPC Method Docs
+
 
 ## License
 
