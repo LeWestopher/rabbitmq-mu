@@ -19,6 +19,22 @@ rabbitmq('your-namespace')
     });
 ```
 
+## Getting a channel object
+
+To get a channel object, we use the `.channel()` method.  This is just a shorthand abstraction of `.connect()` and the
+internal `.createChannel()` method:
+
+```javascript
+
+var rabbitmq = require('./patterns');
+
+rabbitmq('your-namespace')
+    .channel()
+    .then(function (channel) {
+        // Use your channel object here!
+    });
+```
+
 ## Building your first Work Queue
 
 Work queues are some of the most basic types of microservices that can be extended using Mu to offset processing time
@@ -29,7 +45,6 @@ example of a potential email sender:
 ```javascript
 
 var rabbitmq = require('./patterns');
-var PubSub = require('./PubSub/index');
 
 rabbitmq('your-namespace')
     .workQueue('email-sender')
@@ -100,6 +115,7 @@ rabbitmq('your-namespace')
 
 - [X] Connection Docs
 - [ ] Connection with configuration docs
+- [ ] Getting a Channel Object Docs
 - [X] Shorthand Work Queue Docs
 - [ ] Shorthand PubSub Docs
 - [ ] Shorthand Routed Docs

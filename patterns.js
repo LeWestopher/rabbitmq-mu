@@ -258,6 +258,16 @@
         return deferred.promise;
     };
     /**
+     * The basic channel method.  Just a short abstraction of connect and createChannel to return the user a channel
+     * object.
+     *
+     * @returns {Promise}
+     */
+    Patterns.prototype.channel = function () {
+        return this.connect()
+            .then(this.createChannel);
+    };
+    /**
      * The basic method of connecting for calling an RPC method.  We have a specialty method for connecting via RPC because
      * we have to continue to chain the rpc_string, args, and connection objects down the promise chain using spread, so this
      * method is a wrapper for that functionality.
