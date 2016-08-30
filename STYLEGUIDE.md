@@ -39,7 +39,7 @@ Some examples of how we will define how an application that SUBSCRIBES to Rabbit
 // Get the base WorkQueue class from our module
 var WorkQueue = require('rabbitmq-mu').WorkQueue;
 // Extend our own custom work queue in the specified namespace to subscribe to events on
-var custom_workqueue_class = WorkQueue.extend({
+var CustomWorkQueueClass = WorkQueue.extend({
   namespace: 'email-sender',
   daemon: function (msg) {
     // msg is the message that gets published that this current class we are building 'subscribes' to.
