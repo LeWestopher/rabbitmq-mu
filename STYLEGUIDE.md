@@ -55,11 +55,11 @@ instantiated_workqueue.init();
 // Broadcast based on a specific object built previously:
 var secondary_queue = new CustomWorkQueueClass();
 secondary_queue.broadcast({
-  to: 'kyle@kjr.com`, 
+  to: 'kyle@kjr.com', 
   from: 'wes@westopher.com', 
   subject: 'Welcome!', 
-  body: 'This is the email body!'}
-);
+  body: 'This is the email body!'
+});
 
 // Other objects can  be instantianted...
 var PubSub = requre('rabbitmq-mu').PubSub;
