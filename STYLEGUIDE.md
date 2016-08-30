@@ -43,6 +43,8 @@ var custom_workqueue_class = WorkQueue.extend({
   namespace: 'email-sender',
   daemon: function (msg) {
     // msg is the message that gets published that this current class we are building 'subscribes' to.
+    var email = new Email(msg.to, msg.from, msg.subject, msg.body);
+    email.send();
   }
 });
 // Create a new instance of our custom class
