@@ -52,9 +52,19 @@ var istantiated_workqueue = new CustomWorkQueueClass();
 // Initialize the app to listen on the specified namespace for messages.
 instantiated_workqueue.init();
 
+// Broadcast based on a specific object built previously:
+var secondary_queue = new CustomWorkQueueClass();
+secondary_queue.broadcast({
+  to: 'kyle@kjr.com`, 
+  from: 'wes@westopher.com', 
+  subject: 'Welcome!', 
+  body: 'This is the email body!'}
+);
 
+// Other objects can  be instantianted...
 var PubSub = requre('rabbitmq-mu').PubSub;
 var RoutedExchange = require('rabbitmq-mu').RoutedExchange;
+// And more...
 ```
 
 ## The Trick We Use to Make This Happen
